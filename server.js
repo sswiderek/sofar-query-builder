@@ -15,6 +15,11 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
+// ✅ Default route for testing if the backend is running
+app.get("/", (req, res) => {
+  res.send("✅ Sofar API Backend is Running! Use the API endpoints.");
+});
+
 // 3️⃣ Configure OpenAI (✅ Corrected for ES modules)
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY, // Uses API key from .env
@@ -116,3 +121,5 @@ const PORT = 5050; // Keep using 5050 instead of 5000
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
 });
+
+
