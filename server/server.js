@@ -1,125 +1,101 @@
-// server.js (Updated for ES Modules)
 import express from "express";
 import cors from "cors";
-import bodyParser from "body-parser";
-import OpenAI from "openai";
-import fetch from "node-fetch";
 import dotenv from "dotenv";
+import fetch from "node-fetch"; // Ensure node-fetch is installed in package.json
 
-dotenv.config(); // Load environment variables from .env file
+// Load environment variables from .env
+dotenv.config();
 
-// 1️⃣ Create Express app
+// Validate required environment variables
+if (!process.env.SOFAR_API_KEY) {
+  console.error("❌ ERROR: Missing SOFAR_API_KEY in environment variables");
+  process.exit(1);
+}
+
+if (!process.env.OPENAI_API_KEY) {
+  console.error("❌ ERROR: Missing OPENAI_API_KEY in environment variables");
+  process.exit(1);
+}
+
 const app = express();
+const PORT = process.env.PORT || 5050; // Default to port 5050
 
-// 2️⃣ Middleware
+// Middleware
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json());
 
-// ✅ Default route for testing if the backend is running
+// Test Route
 app.get("/", (req, res) => {
   res.send("✅ Sofar API Backend is Running! Use the API endpoints.");
 });
 
-// 3️⃣ Configure OpenAI (✅ Corrected for ES modules)
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, // Uses API key from .env
-});
-
-// 4️⃣ Endpoint: Convert user query into an AI-generated API request
+// API Endpoint: Generate AI Query
 app.post("/api/generate-query", async (req, res) => {
-  const userPrompt = req.body.prompt || "";
-
-  // System instructions for ChatGPT
-  const systemPrompt = `
-    You are an AI that converts natural-language requests into JSON for Sofar's 'latest-data' API.
-    Respond with JSON in this format:
-    {
-      "endpoint": "latest-data",
-      "parameters": {
-        "token": "${process.env.SOFAR_API_KEY}",
-        "spotterId": "SPOT-30344R",
-        "processingSources": "embedded",
-        "includeWindData": false,
-        "includeSurfaceTempData": false,
-        "includeBatteryStatus": false,
-        "includeDirectionalMoments": false,
-        "realTimeOnly": true
-      }
+  try {
+    const userPrompt = req.body.prompt;
+    if (!userPrompt) {
+      return res.status(400).json({ error: "Missing prompt in request body" });
     }
 
-    Rules:
-    - Default spotterId = "SPOT-30344R" unless specified by user.
-    - If user mentions "wind data", set includeWindData = true.
-    - If user mentions "battery", set includeBatteryStatus = true.
-    - If user mentions "wave directions", set includeDirectionalMoments = true.
-    - If user mentions "surface temperature", set includeSurfaceTempData = true.
-    - Only output valid JSON.
-  `;
+    console.log("🔍 Processing AI query for:", userPrompt);
 
-  try {
-    // Send prompt to OpenAI
-    const response = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      temperature: 0,
+    const aiResponse = await fetch("https://api.openai.com/v1/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4",
+        prompt: `Translate this user request into a structured Sofar API query: "${userPrompt}"`,
+        max_tokens: 50,
+      }),
     });
 
-    const rawOutput = response.choices[0].message.content.trim();
-
-    let jsonData;
-    try {
-      jsonData = JSON.parse(rawOutput);
-    } catch (err) {
-      return res.json({
-        error: "Failed to parse AI output as JSON",
-        rawOutput,
-      });
+    if (!aiResponse.ok) {
+      throw new Error(`OpenAI API Error: ${aiResponse.statusText}`);
     }
 
-    res.json(jsonData);
+    const aiData = await aiResponse.json();
+    console.log("🧠 AI Generated Query:", aiData);
+    res.json(aiData);
   } catch (error) {
-    console.error("Error calling OpenAI:", error);
-    res.status(500).json({ error: error.message });
+    console.error("❌ Error in /api/generate-query:", error);
+    res.status(500).json({ error: "Failed to process AI query" });
   }
 });
 
-// 5️⃣ Endpoint: Use the AI-generated JSON to call Sofar's API
+// API Endpoint: Fetch Sofar API Data
 app.post("/api/sofar-call", async (req, res) => {
-  const aiQuery = req.body.aiQuery;
-  if (!aiQuery || !aiQuery.parameters) {
-    return res.status(400).json({ error: "Missing or invalid aiQuery" });
-  }
-
-  const { token, spotterId, processingSources, includeWindData, includeSurfaceTempData, includeBatteryStatus, includeDirectionalMoments, realTimeOnly } = aiQuery.parameters;
-
-  // Construct the Sofar API query string
-  const params = new URLSearchParams({ token, spotterId });
-  if (processingSources) params.append("processingSources", processingSources);
-  if (includeWindData) params.append("includeWindData", "true");
-  if (includeSurfaceTempData) params.append("includeSurfaceTempData", "true");
-  if (includeBatteryStatus) params.append("includeBatteryStatus", "true");
-  if (includeDirectionalMoments) params.append("includeDirectionalMoments", "true");
-  if (realTimeOnly) params.append("realTimeOnly", "true");
-
-  const sofarUrl = `https://api.sofarocean.com/api/latest-data?${params.toString()}`;
-
   try {
-    const sofarResponse = await fetch(sofarUrl);
+    const aiQuery = req.body.aiQuery;
+    if (!aiQuery) {
+      return res.status(400).json({ error: "Missing AI-generated query in request body" });
+    }
+
+    console.log("🌊 Fetching Sofar API data for:", aiQuery);
+
+    const queryParams = new URLSearchParams({
+      spotterId: "SPOT-30344R",
+      token: process.env.SOFAR_API_KEY,
+    });
+
+    const sofarResponse = await fetch(`https://api.sofarocean.com/api/latest-data?${queryParams}`);
+
+    if (!sofarResponse.ok) {
+      throw new Error(`Sofar API Error: ${sofarResponse.statusText}`);
+    }
+
     const sofarData = await sofarResponse.json();
+    console.log("✅ Sofar API Response:", sofarData);
     res.json(sofarData);
   } catch (error) {
-    console.error("Error calling Sofar API:", error);
-    res.status(500).json({ error: error.message });
+    console.error("❌ Error in /api/sofar-call:", error);
+    res.status(500).json({ error: "Failed to retrieve Sofar API data" });
   }
 });
 
-// 6️⃣ Start server
-const PORT = 5050; // Keep using 5050 instead of 5000
+// Start Server
 app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+  console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
-
-
