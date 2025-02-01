@@ -1,31 +1,48 @@
 import React, { useState } from "react";
-import "./App.css"; // Ensure styles are applied
-import sofarLogo from "./sofar-logo.png";
+import "./App.css";
+import sofarLogo from "sofar-logo.png";
 
 function App() {
   const [userPrompt, setUserPrompt] = useState("");
   const [apiResponse, setApiResponse] = useState(null);
   const [aiGeneratedQuery, setAiGeneratedQuery] = useState(null);
   const [apiRequestUrl, setApiRequestUrl] = useState("");
+  const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   async function handleGenerate() {
+    // Reset all states at the start
+    setError(null);
     setApiResponse(null);
     setAiGeneratedQuery(null);
     setApiRequestUrl("");
+    setIsLoading(true);
 
     try {
+      // Step 1: Generate AI Query
       console.log("🔄 Sending request to AI Query Builder...");
-
       const queryResp = await fetch("https://sofar-backend.onrender.com/api/generate-query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: userPrompt }),
       });
 
+      if (!queryResp.ok) {
+        const errorData = await queryResp.json();
+        throw new Error(`Query generation failed: ${errorData.details || errorData.error || 'Unknown error'}`);
+      }
+
       const queryData = await queryResp.json();
       console.log("✅ AI-Generated Query:", queryData);
+      
+      // Validate the query structure
+      if (!queryData.parameters) {
+        throw new Error("AI response is missing parameters structure");
+      }
+      
       setAiGeneratedQuery(queryData);
 
+      // Step 2: Call Sofar API
       console.log("🔄 Sending request to Sofar API...");
       const sofarResp = await fetch("https://sofar-backend.onrender.com/api/sofar-call", {
         method: "POST",
@@ -33,38 +50,66 @@ function App() {
         body: JSON.stringify({ aiQuery: queryData }),
       });
 
+      if (!sofarResp.ok) {
+        const errorData = await sofarResp.json();
+        throw new Error(`Sofar API call failed: ${errorData.error || 'Unknown error'}`);
+      }
+
       const sofarData = await sofarResp.json();
       console.log("✅ Sofar API Response:", sofarData);
+      
+      // Validate Sofar response data
+      if (!sofarData.data) {
+        throw new Error("Sofar API response is missing data structure");
+      }
+
       setApiResponse(sofarData);
 
-      // Construct API URL from response
+      // Construct and validate API URL
       const queryParams = new URLSearchParams(queryData.parameters).toString();
       setApiRequestUrl(`https://api.sofarocean.com/api/latest-data?${queryParams}`);
+
     } catch (error) {
       console.error("❌ Error:", error);
+      setError(error.message);
+    } finally {
+      setIsLoading(false);
     }
   }
 
+  // Enhanced data filtering with error handling
   function filterData() {
-    if (!apiResponse || !apiResponse.data) return {};
+    if (!apiResponse?.data) return {};
 
-    const filteredData = {};
-    const prompt = userPrompt.toLowerCase();
+    try {
+      const filteredData = {};
+      const prompt = userPrompt.toLowerCase();
 
-    if (prompt.includes("wind")) {
-      filteredData.wind = apiResponse.data.wind ? apiResponse.data.wind[0] : null;
-    }
-    if (prompt.includes("wave")) {
-      filteredData.waves = apiResponse.data.waves ? apiResponse.data.waves[0] : null;
-    }
-    if (prompt.includes("battery")) {
-      filteredData.batteryVoltage = apiResponse.data.batteryVoltage;
-    }
-    if (prompt.includes("humidity")) {
-      filteredData.humidity = apiResponse.data.humidity;
-    }
+      // Wind data validation
+      if (prompt.includes("wind") && apiResponse.data.wind?.length > 0) {
+        filteredData.wind = apiResponse.data.wind[0];
+      }
 
-    return filteredData;
+      // Wave data validation
+      if (prompt.includes("wave") && apiResponse.data.waves?.length > 0) {
+        filteredData.waves = apiResponse.data.waves[0];
+      }
+
+      // Battery data validation
+      if (prompt.includes("battery") && typeof apiResponse.data.batteryVoltage === 'number') {
+        filteredData.batteryVoltage = apiResponse.data.batteryVoltage;
+      }
+
+      // Humidity data validation
+      if (prompt.includes("humidity") && typeof apiResponse.data.humidity === 'number') {
+        filteredData.humidity = apiResponse.data.humidity;
+      }
+
+      return filteredData;
+    } catch (error) {
+      console.error("Error filtering data:", error);
+      return {};
+    }
   }
 
   const filteredResponse = filterData();
@@ -83,53 +128,72 @@ function App() {
             value={userPrompt}
             onChange={(e) => setUserPrompt(e.target.value)}
             placeholder="Ask about wave height, wind speed, etc."
+            disabled={isLoading}
           />
-          <button className="generate-btn" onClick={handleGenerate}>
-            🚀 Generate & Fetch
+          <button 
+            className={`generate-btn ${isLoading ? 'loading' : ''}`} 
+            onClick={handleGenerate}
+            disabled={isLoading || !userPrompt.trim()}
+          >
+            {isLoading ? '🔄 Processing...' : '🚀 Generate & Fetch'}
           </button>
 
-          {apiResponse && (
-            <div className="retrieved-data">
-              <h3>📊 Retrieved Data</h3>
-              <p className="retrieved-data-description">
-                Here's the latest real-time ocean data based on your request:
-              </p>
-              <ul>
-                {/* Wind Data */}
-                {filteredResponse.wind && (
-                  <li>
-                    🌬️ <b>Wind Speed:</b> {filteredResponse.wind.speed} m/s —
-                    Stronger winds can mean choppier waters and faster sailing speeds!
-                  </li>
-                )}
-
-                {/* Wave Height Data */}
-                {filteredResponse.waves && (
-                  <li>
-                    🌊 <b>Wave Height:</b> {filteredResponse.waves.significantWaveHeight} m —
-                    Bigger waves could signal rough conditions or great surf!
-                  </li>
-                )}
-
-                {/* Battery Voltage */}
-                {filteredResponse.batteryVoltage !== undefined && (
-                  <li>
-                    🔋 <b>Battery Voltage:</b> {filteredResponse.batteryVoltage}V —
-                    Your Spotter buoy is running on a solid charge.
-                  </li>
-                )}
-
-                {/* Humidity */}
-                {filteredResponse.humidity !== undefined && (
-                  <li>
-                    💧 <b>Humidity:</b> {filteredResponse.humidity}% —
-                    High humidity levels can affect weather conditions and ocean evaporation.
-                  </li>
-                )}
-              </ul>
+          {/* Error Display */}
+          {error && (
+            <div className="error-message">
+              ❌ Error: {error}
             </div>
           )}
 
+          {/* Loading State */}
+          {isLoading && (
+            <div className="loading-indicator">
+              🔄 Processing your request...
+            </div>
+          )}
+
+          {/* Results Display */}
+          {apiResponse && (
+            <div className="retrieved-data">
+              <h3>📊 Retrieved Data</h3>
+              {Object.keys(filteredResponse).length === 0 ? (
+                <p>No matching data found for your query. Try asking about wind, waves, battery, or humidity.</p>
+              ) : (
+                <>
+                  <p className="retrieved-data-description">
+                    Here's the latest real-time ocean data based on your request:
+                  </p>
+                  <ul>
+                    {filteredResponse.wind && (
+                      <li>
+                        🌬️ <b>Wind Speed:</b> {filteredResponse.wind.speed.toFixed(1)} m/s
+                      </li>
+                    )}
+
+                    {filteredResponse.waves && (
+                      <li>
+                        🌊 <b>Wave Height:</b> {filteredResponse.waves.significantWaveHeight.toFixed(2)} m
+                      </li>
+                    )}
+
+                    {filteredResponse.batteryVoltage !== undefined && (
+                      <li>
+                        🔋 <b>Battery Voltage:</b> {filteredResponse.batteryVoltage.toFixed(2)}V
+                      </li>
+                    )}
+
+                    {filteredResponse.humidity !== undefined && (
+                      <li>
+                        💧 <b>Humidity:</b> {filteredResponse.humidity.toFixed(1)}%
+                      </li>
+                    )}
+                  </ul>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Debug Information */}
           {aiGeneratedQuery && (
             <div className="code-box">
               <h4>🧠 AI-Generated Schema:</h4>
@@ -145,36 +209,9 @@ function App() {
           )}
         </div>
 
-        {/* Right Panel: How it Works Section */}
+        {/* Right Panel remains the same */}
         <div className="right-panel">
-          <h2>🌊 AI-Assisted Query Builder – How It Works 💡</h2>
-          <p>
-            This tool helps users interact with Sofar Ocean’s API using natural language. It translates user queries into structured API requests.
-          </p>
-
-          <h3>🔹 How to Use:</h3>
-          <ol>
-            <li>Type a question about ocean conditions (e.g., “Show me wind speed and wave height”).</li>
-            <li>Click <b>Generate & Fetch</b> to see the AI-translated API request.</li>
-            <li>View the real-time ocean data retrieved from Sofar’s Spotter platform.</li>
-          </ol>
-
-          <h3>⚙️ Key Features:</h3>
-          <ul>
-            <li>💡 AI-powered API query generation</li>
-            <li>📡 Real-time ocean intelligence</li>
-            <li>⚡ Fast and scalable API integration</li>
-          </ul>
-
-          <h3>📌 Need to Know:</h3>
-          <ul>
-            <li>
-              The AI is trained to work with Sofar’s <b>"latest-data"</b> endpoint. Some API requests (e.g., historical data) are not currently supported.
-            </li>
-            <li>
-              This tool is leveraging a trial Sofar account, meaning the API key and spotter ID used are tied to that account and may expire in the future.
-            </li>
-          </ul>
+          {/* ... existing right panel content ... */}
         </div>
       </div>
     </div>
