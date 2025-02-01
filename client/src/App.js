@@ -16,7 +16,7 @@ function App() {
     try {
       console.log("🔄 Sending request to AI Query Builder...");
 
-      const queryResp = await fetch("http://localhost:5050/api/generate-query", {
+      const queryResp = await fetch("https://sofar-backend.onrender.com/api/generate-query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: userPrompt }),
@@ -27,7 +27,7 @@ function App() {
       setAiGeneratedQuery(queryData);
 
       console.log("🔄 Sending request to Sofar API...");
-      const sofarResp = await fetch("http://localhost:5050/api/sofar-call", {
+      const sofarResp = await fetch("https://sofar-backend.onrender.com/api/sofar-call", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ aiQuery: queryData }),
