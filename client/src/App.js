@@ -10,7 +10,7 @@ function App() {
         <Construction className="w-16 h-16 mb-4" />
         <h1 className="text-3xl font-bold mb-2">Under Construction</h1>
         <p className="text-lg text-center max-w-md px-4">
-          We're currently building something awesome! This application is under active development and will be available soon.
+          Currently building something awesome! This application is under active development and will be available soon.
         </p>
       </div>
 
