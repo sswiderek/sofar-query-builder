@@ -1,13 +1,13 @@
 import React from 'react';
-import { Construction } from 'lucide-react';
-import sofarLogo from "./sofar-logo.png";  // Updated import path
+import sofarLogo from "./sofar-logo.png";
 
 function App() {
   return (
     <div className="relative min-h-screen">
       {/* Construction Overlay */}
       <div className="fixed inset-0 bg-gray-800/90 z-50 flex flex-col items-center justify-center text-white">
-        <Construction className="w-16 h-16 mb-4" />
+        {/* Simple emoji instead of Lucide icon */}
+        <div className="text-4xl mb-4">🚧</div>
         <h1 className="text-3xl font-bold mb-2">Under Construction</h1>
         <p className="text-lg text-center max-w-md px-4">
           Currently building something awesome! This application is under active development and will be available soon.
