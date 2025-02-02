@@ -1,6 +1,6 @@
 import React from 'react';
 import { Construction } from 'lucide-react';
-import sofarLogo from "sofar-logo.png";
+import sofarLogo from "./sofar-logo.png";  // Updated import path
 
 function App() {
   return (
