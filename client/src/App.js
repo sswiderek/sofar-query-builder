@@ -3,7 +3,18 @@ import sofarLogo from "./sofar-logo.png";
 
 function App() {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="relative min-h-screen">
+      {/* Original App Content (blurred in background) */}
+      <div className="blur-sm fixed inset-0">
+        <div className="container">
+          <div className="background-overlay"></div>
+          <header className="header">
+            <img src={sofarLogo} alt="Sofar Logo" className="sofar-logo" />
+          </header>
+          {/* Original app content */}
+        </div>
+      </div>
+
       {/* Fixed overlay container */}
       <div className="fixed inset-0 bg-gray-900/75 flex items-center justify-center p-4">
         <div className="bg-white/10 backdrop-blur-sm rounded-xl p-8 max-w-2xl w-full text-center shadow-2xl">
@@ -11,7 +22,7 @@ function App() {
           <div className="mb-6">
             <img 
               src={sofarLogo} 
-              alt="Sofar Logo" 
+              alt="Sofar" 
               className="h-12 w-auto mx-auto"
             />
           </div>
